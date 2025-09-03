@@ -1,28 +1,28 @@
-# modules/pdf_extractor.py
-
-import fitz  # PyMuPDF
+import fitz
 import os
+from typing import Optional
 
-def extract_text_from_pdf(pdf_path: str, output_path: str) -> None:
-    if not os.path.exists(pdf_path):
-        raise FileNotFoundError(f"[ERROR] PDF not found: {pdf_path}")
 
-    full_text = ""
-    doc = fitz.open(pdf_path)
+def extract_text_from_pdf(pdf_path: str, output_path: str) -> Optional[str]:
+    """
+    Extracts text from PDF and saves to file
+    Args:
+        pdf_path: Path to input PDF
+        output_path: Path to save extracted text
+    Returns:
+        Extracted text as string if successful, None otherwise
+    """
+    try:
+        doc = fitz.open(pdf_path)
+        full_text = ""
+        for page in doc:
+            full_text += page.get_text() + "\n\n"  # Extra newlines between pages
 
-    for page_num, page in enumerate(doc):
-        text = page.get_text()
-        full_text += f"\n--- Page {page_num + 1} ---\n{text}"
-
-    os.makedirs(os.path.dirname(output_path), exist_ok=True)
-
-    with open(output_path, "w", encoding="utf-8") as f:
-        f.write(full_text.strip())
-
-    print(f"✅ Text extracted from '{pdf_path}' and saved to '{output_path}'")
-
-# Test run (optional, remove in production)
-if __name__ == "__main__":
-    pdf_path = "data/raw_pdfs/os.pdf"
-    output_path = "data/extracted_texts/os.txt"
-    extract_text_from_pdf(pdf_path, output_path)
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            f.write(full_text)
+        print(f"✅ PDF text extracted to {output_path}")
+        return full_text
+    except Exception as e:
+        print(f"❌ Error extracting {pdf_path}: {str(e)}")
+        return None

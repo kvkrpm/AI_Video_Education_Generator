@@ -1,35 +1,77 @@
-from PIL import Image, ImageDraw, ImageFont
-import numpy as np
+import fitz  # PyMuPDF
+import os
+import shutil
+from tqdm import tqdm
 
-def create_background(width=1920, height=1080, color=(0, 0, 0)):
-    """Generate a solid-color background image."""
-    return Image.new("RGB", (width, height), color)
+# Configuration
+PDF_DIR = "data/raw_pdfs"
+IMAGE_DIR = "data/extracted_images"
+def clean_output_folder():
+    """Remove all existing images before processing"""
+    if os.path.exists(IMAGE_DIR):
+        print(f"🧹 Cleaning existing images in {IMAGE_DIR}...")
+        shutil.rmtree(IMAGE_DIR)
+    os.makedirs(IMAGE_DIR, exist_ok=True)
 
-def add_text_to_image(image, text, font_path="arial.ttf", font_size=50, text_color=(255, 255, 255), position=(50, 50)):
-    """Overlay text on an image."""
-    draw = ImageDraw.Draw(image)
+
+def extract_images_from_pdf(pdf_path):
+    """Extract all images from a single PDF"""
     try:
-        font = ImageFont.truetype(font_path, font_size)
-    except IOError:
-        font = ImageFont.load_default()
-    draw.text(position, text, fill=text_color, font=font)
-    return image
+        doc = fitz.open(pdf_path)
+        pdf_name = os.path.splitext(os.path.basename(pdf_path))[0]
+        img_count = 0
 
-def resize_image(image, target_width=None, target_height=None):
-    """Resize image while maintaining aspect ratio."""
-    if target_width and target_height:
-        return image.resize((target_width, target_height))
-    elif target_width:
-        ratio = target_width / float(image.width)
-        new_height = int(float(image.height) * ratio)
-        return image.resize((target_width, new_height))
-    elif target_height:
-        ratio = target_height / float(image.height)
-        new_width = int(float(image.width) * ratio)
-        return image.resize((new_width, target_height))
-    return image
+        for page_num, page in enumerate(doc, start=1):
+            for img_index, img in enumerate(page.get_images(full=True), start=1):
+                xref = img[0]
+                base_image = doc.extract_image(xref)
 
-# Example usage:
-bg = create_background(color=(34, 34, 34))  # Dark gray
-bg_with_text = add_text_to_image(bg, "PDF Summary", position=("center", "center"))
-bg_with_text.save("output_bg.png")
+                # Validate image
+                if not base_image["image"]:
+                    continue
+
+                # Determine extension (fallback to png)
+                ext = base_image.get("ext", "png").lower()
+                if ext not in ["jpg", "jpeg", "png", "gif"]:
+                    ext = "png"
+
+                # Save image
+                img_path = os.path.join(
+                    IMAGE_DIR,
+                    f"{pdf_name}_p{page_num}_i{img_index}.{ext}"
+                )
+                with open(img_path, "wb") as f:
+                    f.write(base_image["image"])
+                img_count += 1
+
+        return img_count
+
+    except Exception as e:
+        print(f"❌ Error processing {pdf_path}: {str(e)}")
+        return 0
+
+
+def main():
+    # Clean output folder before processing
+    clean_output_folder()
+
+    # Process all PDFs
+    print(f"🖼️ Extracting images from PDFs in {PDF_DIR}")
+    pdf_files = [f for f in os.listdir(PDF_DIR) if f.lower().endswith(".pdf")]
+
+    if not pdf_files:
+        print("⚠️ No PDF files found in the input directory!")
+        return
+
+    for pdf_file in tqdm(pdf_files, desc="Processing PDFs"):
+        pdf_path = os.path.join(PDF_DIR, pdf_file)
+        count = extract_images_from_pdf(pdf_path)
+        if count > 0:
+            print(f"✅ {pdf_file}: Extracted {count} images")
+
+
+    print("🏁 Image extraction complete.")
+
+
+if __name__ == "__main__":
+    main()

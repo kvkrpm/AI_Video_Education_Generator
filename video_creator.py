@@ -1,27 +1,35 @@
-# video_creator.py
+import cv2
+import numpy as np
+from PIL import Image, ImageDraw, ImageFont
 
-from moviepy.editor import TextClip, AudioFileClip, CompositeVideoClip
-from moviepy.config import change_settings
+def create_slide(text, image_path=None, size=(1280, 720)):
+    img = Image.new('RGB', size, color=(255, 255, 255))
+    draw = ImageDraw.Draw(img)
 
-# Update this to match your system's actual path
-change_settings({
-    "IMAGEMAGICK_BINARY": r"C:\Program Files\ImageMagick\magick.exe"
-})
+    font = ImageFont.truetype("arial.ttf", 40)  # You can change font
+    margin = 40
+    offset = 100
 
-def create_video(summary_text, audio_path, output_video_path):
-    audio_clip = AudioFileClip(audio_path)
-    text_clip = TextClip(summary_text, fontsize=24, color='white', bg_color='black',
-                         size=(720, 1280), method='caption').set_duration(audio_clip.duration)
-    video = CompositeVideoClip([text_clip]).set_audio(audio_clip)
-    video.write_videofile(output_video_path, fps=24)
-    print("🎬 Video created successfully.")
+    # Wrap text
+    for line in textwrap.wrap(text, width=40):
+        draw.text((margin, offset), line, font=font, fill="black")
+        offset += 60
 
-if __name__ == "__main__":
-    with open("data/summaries/os_summary.txt", "r", encoding="utf-8") as f:
-        summary_text = f.read()
+    # If image exists, paste it
+    if image_path:
+        with Image.open(image_path).convert("RGB") as img2:
+            img2 = img2.resize((640, 360))
+            img.paste(img2, (320, 300))
 
-    create_video(
-        summary_text=summary_text,
-        audio_path="data/audio/os_summary.mp3",
-        output_video_path="data/videos/os_summary.mp4"
-    )
+    return cv2.cvtColor(np.array(img), cv2.COLOR_RGB2BGR)
+
+def generate_video(slides, output_path="generated_video.avi", fps=1):
+    size = (1280, 720)
+    out = cv2.VideoWriter(output_path, cv2.VideoWriter_fourcc(*'XVID'), fps, size)
+
+    for slide in slides:
+        out.write(slide)
+
+    out.release()
+    print(f"Video saved to {output_path}")
+
